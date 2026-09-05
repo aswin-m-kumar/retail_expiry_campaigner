@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import health
+from routers import health
 
 app = FastAPI(
     title="Retail Expiry Campaigner API",
