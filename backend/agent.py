@@ -1,13 +1,13 @@
 import os
 import random
 from datetime import datetime, timedelta
-from langchain_mistralai import ChatMistralAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from . import db, config
 
-# Initialize Mistral AI via LangChain
-# Ensure MISTRAL_API_KEY is set in your environment
-llm = ChatMistralAI(api_key=os.getenv("MISTRAL_API_KEY"), model="mistral-large-latest")
+# Initialize Groq via LangChain
+# Ensure GROQ_API_KEY is set in your environment
+llm = ChatGroq(api_key=os.getenv("GROQ_API_KEY"), model="openai/gpt-oss-120b")
 
 def compute_urgency_score(inventory_row: dict) -> float:
     expiry_date = datetime.strptime(inventory_row["expiry_date"], "%Y-%m-%d").date()
@@ -50,8 +50,8 @@ def decide_strategy(urgency: float, affinity: float, would_buy_anyway: float) ->
 
 def generate_reasoning_text(user_row: dict, item_row: dict, scores: dict, strategy: str) -> str:
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful retail marketing assistant."),
-        ("user", "User: {user}, Item: {item}, Strategy: {strategy}, Scores: {scores}. Write a short customer-facing offer/notification.")
+        ("system", "You are a helpful retail marketing assistant. Your response must be a single, concise sentence."),
+        ("user", "User: {user}, Item: {item}, Strategy: {strategy}, Scores: {scores}. Write a one-line customer-facing offer/notification.")
     ])
     chain = prompt | llm
     response = chain.invoke({
@@ -63,6 +63,7 @@ def generate_reasoning_text(user_row: dict, item_row: dict, scores: dict, strate
     return response.content
 
 def run_campaign():
+    # ... (keep existing implementation)
     inventory = db.get_expiring_inventory(config.EXPIRY_WINDOW_DAYS)
     users = db.get_users(role="customer")
     logs = []
@@ -90,7 +91,7 @@ def run_campaign():
 
 def answer_owner_query(query_text: str) -> str:
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a store inventory expert."),
+        ("system", "You are a store inventory expert. Answer in one concise line."),
         ("user", "{query}")
     ])
     chain = prompt | llm
@@ -98,7 +99,7 @@ def answer_owner_query(query_text: str) -> str:
 
 def answer_customer_query(query_text: str, user_id: str) -> str:
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a friendly store assistant helping a customer."),
+        ("system", "You are a friendly store assistant. Answer in one concise line."),
         ("user", "{query}")
     ])
     chain = prompt | llm
