@@ -22,13 +22,18 @@ def get_client() -> Client:
             raise e
     return _client
 
-def get_expiring_inventory(window_days: int):
+def get_expiring_inventory(window_days: int = 30):
     client = get_client()
-    # Note: days_to_expiry computed in SQL or filtered via date comparison
-    # This is a simplified version; actual implementation would use a date filter
-    # For now, we fetch all and let the agent filter or use a RPC if available
-    response = client.table("inventory").select("*, items(*)").execute()
-    return response.data
+    try:
+        response = client.table("inventory").select("*, items(*)").execute()
+        return response.data
+    except Exception as e:
+        inv_data = client.table("inventory").select("*").execute().data
+        items_data = client.table("items").select("*").execute().data
+        item_map = {item["item_id"]: item for item in items_data}
+        for inv in inv_data:
+            inv["items"] = item_map.get(inv.get("item_id"), {})
+        return inv_data
 
 def get_users(role: str = None):
     client = get_client()
@@ -51,11 +56,29 @@ def insert_offer(row: dict):
     client = get_client()
     client.table("offers").insert(row).execute()
 
+def resolve_user_id(identifier: str) -> str:
+    if not identifier:
+        return identifier
+    try:
+        import uuid
+        uuid.UUID(identifier)
+        return identifier
+    except ValueError:
+        try:
+            client = get_client()
+            res = client.table("user").select("user_id").ilike("name", identifier).execute()
+            if res.data and len(res.data) > 0:
+                return res.data[0]["user_id"]
+        except Exception:
+            pass
+        return identifier
+
 def get_notifications(user_id: str = None):
     client = get_client()
     query = client.table("notifications").select("*")
     if user_id:
-        query = query.eq("user_id", user_id)
+        resolved_id = resolve_user_id(user_id)
+        query = query.eq("user_id", resolved_id)
     response = query.execute()
     return response.data
 
@@ -63,7 +86,8 @@ def get_offers(user_id: str = None):
     client = get_client()
     query = client.table("offers").select("*")
     if user_id:
-        query = query.eq("user_id", user_id)
+        resolved_id = resolve_user_id(user_id)
+        query = query.eq("user_id", resolved_id)
     response = query.execute()
     return response.data
 

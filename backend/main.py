@@ -1,6 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import health, inventory, campaigns, chat, notifications, offers
+from backend.routers import health, inventory, campaigns, chat, notifications, offers, users
 from backend import db
 
 app = FastAPI(
@@ -29,6 +29,7 @@ app.include_router(campaigns.router)
 app.include_router(chat.router)
 app.include_router(notifications.router)
 app.include_router(offers.router)
+app.include_router(users.router)
 
 @app.get("/")
 def root():
