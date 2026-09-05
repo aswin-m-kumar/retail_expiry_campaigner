@@ -71,13 +71,13 @@ def decide_strategy(urgency: float, affinity: float, would_buy_anyway: float) ->
     
     if total_score > 0.7:
         band = config.DISCOUNT_BANDS.get("aggressive_discount", (31, 50))
-        return "aggressive_discount", round(random.uniform(*band), 1), total_score
+        return "aggressive_discount", round(random.uniform(*band), 2), total_score
     elif total_score > 0.4:
         band = config.DISCOUNT_BANDS.get("tiered_discount", (16, 30))
-        return "tiered_discount", round(random.uniform(*band), 1), total_score
+        return "tiered_discount", round(random.uniform(*band), 2), total_score
     else:
         band = config.DISCOUNT_BANDS.get("small_perk", (5, 15))
-        return "small_perk", round(random.uniform(*band), 1), total_score
+        return "small_perk", round(random.uniform(*band), 2), total_score
 
 def generate_reasoning_text(user_row: dict, item_row: dict, scores: dict, strategy: str) -> str:
     user_name = user_row.get("name", "Valued Customer")
@@ -163,17 +163,77 @@ def run_campaign():
     return logs
 
 def answer_owner_query(query_text: str) -> str:
+    inventory = db.get_expiring_inventory(config.EXPIRY_WINDOW_DAYS)
+    today = datetime.now().date()
+    
+    expiring_2_days = []
+    expiring_7_days = []
+    low_stock = []
+    
+    for inv in inventory:
+        exp_str = inv.get("expiry_date", "")
+        if exp_str:
+            try:
+                exp_date = datetime.strptime(exp_str[:10], "%Y-%m-%d").date()
+                days = (exp_date - today).days
+                item_info = inv.get("items", {}) or {}
+                item_name = item_info.get("name", "Unknown Item")
+                batch_no = inv.get("batch_no", "N/A")
+                stock_qty = inv.get("stock_qty", 0)
+                
+                row_tuple = (item_name, batch_no, stock_qty, exp_str[:10], days)
+                
+                if days <= 2:
+                    expiring_2_days.append(row_tuple)
+                if days <= 7:
+                    expiring_7_days.append(row_tuple)
+                if stock_qty < 20:
+                    low_stock.append(row_tuple)
+            except Exception:
+                pass
+
+    summary = (
+        f"Total batches: {len(inventory)}. "
+        f"Expiring in <=2 days ({len(expiring_2_days)} items). "
+        f"Expiring in <=7 days ({len(expiring_7_days)} items)."
+    )
+
     if llm:
         try:
             prompt = ChatPromptTemplate.from_messages([
-                ("system", "You are a store inventory expert assistant. Answer concisely in 1-2 sentences."),
+                ("system", f"You are an expert store operations assistant. Live Inventory Context: {summary}. "
+                           "ALWAYS format product listings as a clean Markdown table with headers: | Product Name | Batch No | Stock Qty | Expiry Date | Risk Level |."),
                 ("user", "{query}")
             ])
             chain = prompt | llm
-            return chain.invoke({"query": query_text}).content
+            res = chain.invoke({"query": query_text}).content
+            if res and len(res.strip()) > 5:
+                return res.strip()
         except Exception:
             pass
-    return f"Inventory Assistant: Answer for query '{query_text}'. All expiring batches are tracked in the database."
+            
+    query_lower = query_text.lower()
+    
+    def build_table(items_list):
+        lines = ["| Product Name | Batch No | Stock Qty | Expiry Date | Risk Level |", "| :--- | :---: | :---: | :---: | :---: |"]
+        for name, batch, stock, exp, days in items_list:
+            risk = "🔴 High" if days <= 2 else ("🟡 Medium" if days <= 7 else "🟢 Low")
+            lines.append(f"| **{name}** | `{batch}` | {stock} units | `{exp}` | {risk} |")
+        return "\n".join(lines)
+
+    if "2" in query_lower or "two" in query_lower:
+        if expiring_2_days:
+            return f"### ⚠️ Items Expiring Within 2 Days ({len(expiring_2_days)} Batches)\n\n" + build_table(expiring_2_days)
+        return "No items expiring within 2 days."
+    elif "7" in query_lower or "week" in query_lower:
+        if expiring_7_days:
+            return f"### 📅 Items Expiring Within 7 Days ({len(expiring_7_days)} Batches)\n\n" + build_table(expiring_7_days[:10])
+        return "No items expiring within 7 days."
+    else:
+        target = expiring_2_days if expiring_2_days else expiring_7_days
+        if target:
+            return f"### 📦 Inventory Overview ({len(inventory)} Total Batches)\n\n" + build_table(target[:8])
+        return f"Inventory Summary: {len(inventory)} total batches tracked."
 
 def answer_customer_query(query_text: str, user_id: str) -> str:
     resolved_id = db.resolve_user_id(user_id)
@@ -183,18 +243,29 @@ def answer_customer_query(query_text: str, user_id: str) -> str:
     if llm:
         try:
             prompt = ChatPromptTemplate.from_messages([
-                ("system", f"You are a store deal assistant. User has {len(offers)} active offers and {len(notifications)} notifications. Answer concisely."),
+                ("system", f"You are a friendly retail deal assistant. Total offers: {len(offers)}, notifications: {len(notifications)}. "
+                           "Format deal recommendations as Markdown tables with columns: | Offer / Strategy | Discount | Status |."),
                 ("user", "{query}")
             ])
             chain = prompt | llm
-            return chain.invoke({"query": query_text}).content
+            res = chain.invoke({"query": query_text}).content
+            if res and len(res.strip()) > 5:
+                return res.strip()
         except Exception:
             pass
             
     if offers:
-        best_offer = max(offers, key=lambda x: x.get("discount_pct", 0))
-        return f"You currently have {len(offers)} deal(s) available! Best offer: {best_offer.get('discount_pct')}% off."
+        lines = [
+            "### 🏷️ Active Deals For You\n",
+            "| Strategy / Deal | Discount | Status |",
+            "| :--- | :---: | :---: |"
+        ]
+        for o in offers[:8]:
+            strat = o.get("strategy_type", "offer").replace("_", " ").title()
+            disc = float(o.get("discount_pct", 0))
+            lines.append(f"| **{strat}** | **{disc:.2f}% OFF** | 🟢 Available |")
+        return "\n".join(lines)
     elif notifications:
         return f"You have {len(notifications)} notification(s) regarding fresh expiring stock."
     else:
-        return "You don't have active deals right now. Ask the store owner to run the latest campaign!"
+        return "You don't have active deals right now. Click 'Run Campaign Engine' to generate new deals!"

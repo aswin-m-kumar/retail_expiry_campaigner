@@ -95,3 +95,25 @@ def update_inventory_stock(inventory_id: str, new_qty: int):
     client = get_client()
     response = client.table("inventory").update({"stock_qty": new_qty}).eq("inventory_id", inventory_id).execute()
     return response.data
+
+def claim_offer(offer_id: str):
+    client = get_client()
+    try:
+        offer = client.table("offers").select("*").eq("offer_id", offer_id).execute().data
+        if not offer:
+            return {"status": "error", "message": "Offer not found"}
+        offer_data = offer[0]
+        inv_id = offer_data.get("inventory_id")
+        
+        client.table("offers").delete().eq("offer_id", offer_id).execute()
+        
+        if inv_id:
+            inv = client.table("inventory").select("*").eq("inventory_id", inv_id).execute().data
+            if inv and len(inv) > 0:
+                current_qty = inv[0].get("stock_qty", 1)
+                new_qty = max(0, current_qty - 1)
+                client.table("inventory").update({"stock_qty": new_qty}).eq("inventory_id", inv_id).execute()
+                
+        return {"status": "success", "message": "Offer claimed successfully!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
