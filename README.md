@@ -42,6 +42,84 @@ graph LR
     F --> G[Write to Supabase]
 ```
 
+### Database Schema
+```mermaid
+erDiagram
+    USER ||--o{ PURCHASE : makes
+    USER ||--o{ NOTIFICATION : receives
+    USER ||--o{ OFFER : receives
+    ITEM ||--o{ INVENTORY : contains
+    ITEM ||--o{ PURCHASE : is_bought
+    INVENTORY ||--o{ NOTIFICATION : triggers
+    INVENTORY ||--o{ OFFER : triggers
+
+    USER {
+        uuid user_id PK
+        string name
+        string role
+        string loyalty_tier
+        string discount_sensitivity
+    }
+    ITEM {
+        uuid item_id PK
+        string name
+        string category
+        string perishability_tier
+    }
+    INVENTORY {
+        uuid inventory_id PK
+        uuid item_id FK
+        date expiry_date
+        int stock_qty
+    }
+    PURCHASE {
+        uuid purchase_id PK
+        uuid user_id FK
+        uuid item_id FK
+        datetime purchased_at
+    }
+    NOTIFICATION {
+        uuid notification_id PK
+        uuid user_id FK
+        uuid inventory_id FK
+        text message
+    }
+    OFFER {
+        uuid offer_id PK
+        uuid user_id FK
+        uuid inventory_id FK
+        string strategy_type
+        numeric discount_pct
+    }
+```
+
+### User Flow
+```mermaid
+sequenceDiagram
+    participant Owner
+    participant Frontend
+    participant Backend
+    participant DB
+    participant LLM
+
+    Owner->>Frontend: Log in as Owner
+    Frontend->>Backend: GET /inventory
+    Backend->>DB: Query expiring items
+    DB-->>Backend: Return list
+    Backend-->>Frontend: Display Table
+    Owner->>Frontend: Click "Run Campaign"
+    Frontend->>Backend: POST /campaigns/run
+    Backend->>Backend: Start Background Task
+    Backend-->>Frontend: Return "Started"
+    
+    loop for each user/item
+        Backend->>DB: Fetch user history
+        Backend->>Backend: Calculate Scores
+        Backend->>LLM: Generate personalized text
+        Backend->>DB: Write Offer/Notification
+    end
+```
+
 ## Project layout
 
 ```
