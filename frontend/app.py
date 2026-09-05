@@ -32,6 +32,34 @@ if not st.session_state.authenticated:
 # Authenticated Dashboard
 st.title(f"🛒 Retail Expiry Campaigner - {st.session_state.role.capitalize()} View")
 
+# ── Role-specific sidebar ──
+with st.sidebar:
+    st.markdown(f"### 👤 {st.session_state.user_id}")
+    role_label = "🏪 Store Owner" if st.session_state.role == "owner" else "🛍️ Customer"
+    st.markdown(f"**Role:** {role_label}")
+    st.divider()
+
+    if st.session_state.role == "owner":
+        st.markdown("#### Navigation")
+        st.markdown("""
+        - 📦 **Inventory** — monitor expiring stock
+        - 📢 **Campaigns** — run the agent
+        - 📜 **Agent Log** — review decisions
+        - 🤖 **Owner AI** — chat with your assistant
+        """)
+    else:
+        st.markdown("#### Navigation")
+        st.markdown("""
+        - 👤 **My Deals** — your notifications & offers
+        - 🤖 **Deal Finder** — ask about availability
+        """)
+
+    st.divider()
+    if st.button("🚪 Logout"):
+        st.session_state.authenticated = False
+        st.session_state.role = None
+        st.rerun()
+
 if st.session_state.role == "owner":
     tab1, tab2, tab3, tab4 = st.tabs(["📦 Inventory", "📢 Campaigns", "📜 Agent Log", "🤖 Owner AI"])
 
@@ -138,8 +166,3 @@ else: # Customer View
                     st.error(f"API Error: {res.status_code}")
             except Exception as e:
                 st.error(f"Connection error: {e}")
-
-if st.sidebar.button("Logout"):
-    st.session_state.authenticated = False
-    st.session_state.role = None
-    st.rerun()
