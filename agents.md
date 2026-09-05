@@ -20,25 +20,24 @@ An intelligent retail campaign agent that scans inventory nearing expiry and dec
 - [x] **Shared Virtual Environment**: Initialized at `.venv/` (gitignored).
 - [x] **Backend Baseline**: `backend/main.py` initialized with FastAPI and `backend/routers/health.py` mounted.
 - [x] **Frontend Baseline**: `frontend/app.py` entrypoint with initial metric cards, page skeletons (`1_Inventory.py`, `2_Campaigns.py`), and config (`frontend/src/config.py`).
+- [x] **Database Schema & Migrations**: All 6 SQL migration files generated and executed in Supabase SQL editor (`user`, `items`, `inventory`, `purchases`, `notifications`, `offers`).
 
 ### Current Position & Next Implementation Steps
 1. **Dependencies & Environment Setup**:
-   - Add `supabase`, `anthropic`, `python-dotenv` to `backend/requirements.txt` and install into `.venv`.
+   - Add `supabase`, `anthropic`, `python-dotenv` to `backend/requirements.txt` (Done) and install into `.venv`.
    - Setup root `.env` (`SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY`).
-2. **Database Migrations (`migrations/`)**:
-   - Create SQL migration files `0001_create_user.sql` through `0006_create_offers.sql` and apply sequentially in Supabase SQL editor or CLI.
-3. **Seed Data Script (`backend/seed.py`)**:
+2. **Seed Data Script (`backend/seed.py`)**:
    - Generate realistic retail mock data (customers, items with perishability tiers, expiring inventory batches, past purchases) and seed Supabase.
-4. **Data Access Layer (`backend/db.py`)**:
+3. **Data Access Layer (`backend/db.py`)**:
    - Supabase client initialization, typed CRUD helpers, computed queries (`days_to_expiry`), and inventory update helpers.
-5. **Configuration & Tunable Parameters (`backend/config.py`)**:
+4. **Configuration & Tunable Parameters (`backend/config.py`)**:
    - Define expiry thresholds, perishability weights, affinity lookback window, and discount bands.
-6. **Agent Engine (`backend/agent.py`)**:
+5. **Agent Engine (`backend/agent.py`)**:
    - Implement scoring functions (`urgency`, `affinity`, `would_buy_anyway`), deterministic decision surface, Claude prompt for reasoning copy, and `run_campaign()` orchestrator.
    - Implement conversational AI handlers for Owner (`parse_owner_query`, `analyze_inventory_health`, `apply_inventory_update`, `answer_owner_query`) and Customer (`parse_customer_query`, `answer_availability`, `get_live_offers_for_user`, `answer_customer_query`).
-7. **Backend API Endpoints (`backend/routers/`)**:
+6. **Backend API Endpoints (`backend/routers/`)**:
    - Create routers to trigger campaign runs, query expiring inventory, execute chat queries, and fetch notification/offer logs.
-8. **Streamlit UI Integration (`frontend/`)**:
+7. **Streamlit UI Integration (`frontend/`)**:
    - Implement Owner Dashboard (expiring inventory, run campaign trigger, aggregate metrics).
    - Implement Customer View (user switcher, received notifications & offers).
    - Implement Agent Log View (transparent scoring table, decisions, and Claude reasoning).
